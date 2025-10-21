@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Character Customization</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+        <script type="importmap">
+    {
+    "imports": {
+        "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.154.0/examples/jsm/"
+    }
+    }
+    </script>
+    <script type="module" src="/static/js/app.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <div class="viewer-panel">
+            <div id="viewer-container"></div>
+            <!-- <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-spinner"></div>
+                <div>Loading 3D Model...</div>
+            </div> -->
+            <!-- <div class="viewer-controls">
+                
+                <button class="viewer-btn" onclick="toggleWireframe()">📐 Wireframe</button>
+                <button class="viewer-btn" onclick="toggleAnimation()">▶️ Animate</button>
+            </div> -->
+        </div>
+
+        <div class="controls-panel">
+            <!-- <div class="section">
+                <h3>Character Base</h3>
+                <div class="character-selector">
+                    <div class="character-option selected" data-character="female" onclick="selectCharacter('female')">
+                        <div style="font-size: 2em;">👩</div>
+                        <div>Female</div>
+                    </div>
+                    <div class="character-option" data-character="male" onclick="selectCharacter('male')">
+                        <div style="font-size: 2em;">👨</div>
+                        <div>Male</div>
+                    </div>
+                </div>
+            </div> -->
+            <div class="section">
+            <h3>Animation Configuration</h3>
+            <div class="config-form">
+                <div class="form-group">
+                    <label for="participant">Participant ID</label>
+                    <input type="text" id="participant" class="form-input" value="04">
+                </div>
+                <div class="form-group">
+                    <label for="movement">Movement Type</label>
+                    <select id="movement" class="form-input">
+                        <option value="squat">squat</option>
+                        <option value="walk">Walk</option>
+                        <option value="run">Run</option>
+                        <option value="jump">Jump</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="setType">Set Type</label>
+                    <select id="setType" class="form-input">
+                        <option value="correct">correct</option>
+                        <option value="set1">incorrect</option>
+                        <option value="set2">Set 2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="camera">Camera</label>
+                    <select id="camera" class="form-input">
+                        <option value="1">1</option>
+                        <option value="2">Camera 2</option>
+                        <option value="3">Camera 3</option>
+                        <option value="4">Camera 4</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="fps">FPS</label>
+                    <input type="number" id="fps" class="form-input" value="30" min="1" max="60">
+                </div>
+                <div class="form-group">
+                    <label for="saveName">Save Name</label>
+                    <input type="text" id="saveName" class="form-input" value="test_animation">
+                </div>
+            </div>
+        </div>
+
+            <div class="section">
+                <h3>Appearance</h3>
+                <div class="slider-group">
+                    <label>Skin Tone</label>
+                        <div>
+                            <input id="skinColorPicker" type="color" value="#d08b5b" />
+                        </div>
+                    <!-- <div class="slider-container">
+                        <input type="range" class="slider" id="skinTone" min="0" max="100" value="50" oninput="updateSkinTone(this.value)">
+                        <span class="slider-value" id="skinToneValue">50</span>
+                    </div> -->
+                </div>
+                <!-- Skin Color -->
+
+                <div class="slider-group">
+                    <label>Choose Hairstyle</label>
+                    <div class="grid-selector" >
+                        <div class="grid-item" id="defaultHair">
+                           <p>Hair 01</p>
+                        </div>
+                        <div class="grid-item" id="customHair">
+                           <p>Hair 02</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="slider-group">
+                    <label>Choose Tshirt</label>
+                    <div class="grid-selector" >
+                        <div class="grid-item" id="defaultTshirt">
+                           <p>Default</p>
+                        </div>
+                        <div class="grid-item" id="customTshirt">
+                           <p>Custom</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tshirt Color -->
+                 <div class="slider-group">
+                    <label>Upper clothes color</label>
+                     <div>
+                         <input id="tshirtColorPicker" type="color" value="#000000" />
+                     </div>
+                </div>
+                <div class="slider-group">
+                    <label>Body Weight</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="morphSlider" min="0" max="1" step="0.01" value="0">
+                        <span class="slider-value" id="morphSliderValue">0</span>
+                    </div>
+                </div>
+                <div class="slider-group">
+                    <label>Height</label>
+                    <div class="slider-container">
+                        <input type="range" class="slider" id="height" min="80" max="120" value="100" oninput="updateHeight(this.value)">
+                        <span class="slider-value" id="heightValue">100</span>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Limbs -->
+            <div class="section">
+                <h3>Accessibility</h3>
+                <div class="slider-group">
+                    <label>Left Arm</label>
+                    <div class="slider-container">
+                        <input id="leftArmLength" class="slider" type="range" min="1" max="4" value="4" />
+                        <span class="slider-value" id="leftArmLengthValue">4</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="section">
+                <h3>Generate Exercise</h3>
+                <button class="final-btn" onclick="generateExercise()">
+                    Generate Animation
+                </button>
+                <button onclick="checkFileInfo()">
+                    Info
+                </button>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+    </div>
+
+    
+</body>
+</html>
