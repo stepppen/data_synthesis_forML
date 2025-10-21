@@ -1,4 +1,9 @@
 *.fbx
 *.hdr
+*.hdri
+*.exr
 data/hdris/
 static/env/
+**/*.hdr
+**/*.hdri
+**/*.exr
