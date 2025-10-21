@@ -1,2 +1,4 @@
 *.fbx
 *.hdr
+data/hdris/
+static/env/
