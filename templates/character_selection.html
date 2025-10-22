@@ -17,33 +17,7 @@
 </head>
 <body>
     <div class="app-container">
-        <div class="viewer-panel">
-            <div id="viewer-container"></div>
-            <!-- <div class="loading-overlay" id="loadingOverlay">
-                <div class="loading-spinner"></div>
-                <div>Loading 3D Model...</div>
-            </div> -->
-            <!-- <div class="viewer-controls">
-                
-                <button class="viewer-btn" onclick="toggleWireframe()">📐 Wireframe</button>
-                <button class="viewer-btn" onclick="toggleAnimation()">▶️ Animate</button>
-            </div> -->
-        </div>
-
         <div class="controls-panel">
-            <!-- <div class="section">
-                <h3>Character Base</h3>
-                <div class="character-selector">
-                    <div class="character-option selected" data-character="female" onclick="selectCharacter('female')">
-                        <div style="font-size: 2em;">👩</div>
-                        <div>Female</div>
-                    </div>
-                    <div class="character-option" data-character="male" onclick="selectCharacter('male')">
-                        <div style="font-size: 2em;">👨</div>
-                        <div>Male</div>
-                    </div>
-                </div>
-            </div> -->
             <div class="section">
             <h3>Animation Configuration</h3>
             <div class="config-form">
@@ -141,7 +115,7 @@
                 <div class="slider-group">
                     <label>Height</label>
                     <div class="slider-container">
-                        <input type="range" class="slider" id="height" min="80" max="120" value="100" oninput="updateHeight(this.value)">
+                        <input type="range" class="slider" id="height" min="80" max="120" value="100">
                         <span class="slider-value" id="heightValue">100</span>
                     </div>
                 </div>

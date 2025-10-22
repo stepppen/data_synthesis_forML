@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-// import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 let scene, camera, renderer, controls;
@@ -15,27 +14,11 @@ let tshirtMeshes = [];
 let hairMeshes = [];
 let fbxModel = null;
 
+//expose functions to global window -> can be called by html
 window.init = init;
 window.loadCharacter = loadCharacter;
-window.selectCharacter = selectCharacter;
-window.updateSkinTone = updateSkinTone;
-window.updateBodyWeight = updateBodyWeight;
-window.updateHeight = updateHeight;
 window.generateExercise = generateExercise;
 window.checkFileInfo = checkFileInfo;
-
-let characterState = {
-    base: 'female',
-    skinTone: 100,
-    bodyWeight: 50,
-    height: 100,
-    limbs: {
-        leftArm: false,
-        rightArm: true,
-        leftLeg: true,
-        rightLeg: true
-    }
-};
 
 
 function init() {
@@ -63,8 +46,8 @@ function init() {
         (texture) => {
             const envMap = pmremGenerator.fromEquirectangular(texture).texture;
             scene.environment = envMap;
+            // scene.background = envMap;
             scene.background = new THREE.Color(0xeeeeee);
-            
             texture.dispose();
             pmremGenerator.dispose();
         },
@@ -99,8 +82,8 @@ function init() {
 
     const groundGeometry = new THREE.PlaneGeometry(20, 20);
     const groundMaterial = new THREE.MeshStandardMaterial({
-        color: 0x808080,
-        roughness: 0.8,
+        color: 0xeeeeee,
+        roughness: 0.1,
     });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
@@ -128,7 +111,7 @@ function findSkinMeshes(root) {
         const name = (child.name || "").toLowerCase();
         const matName = (child.material && child.material.name || "").toLowerCase();
         
-        // Explicitly exclude clothing items first
+        //exclude clothing items
         const isClothing = (
             name.includes("shirt") || name.includes("tshirt") || name.includes("top") ||
             name.includes("sweater") || name.includes("jacket") ||
@@ -140,7 +123,7 @@ function findSkinMeshes(root) {
             matName.includes("sweater")
         );
         
-        // Match skin-related names - now including "body" if not clothing
+        // Match skin & body
         const isSkin = (
             (name.includes("skin") || matName.includes("skin")) ||
             (name.includes("face") || matName.includes("face")) ||
@@ -190,7 +173,6 @@ function findHairMeshes(root) {
         const name = (child.name || "").toLowerCase();
         const matName = (child.material && child.material.name || "").toLowerCase();
         if (
-            // matName.includes("hair") ||
             matName.includes("Ch31_Hair001") ||
             (name.match(/^ch\d+_hair001/i))
         ) {
@@ -200,14 +182,6 @@ function findHairMeshes(root) {
     });
     return candidates;
 }
-
-// function findBones(root) {
-//     root.traverse((child) => {
-//         if (child.isSkinnedMesh && child.skeleton) {
-//             bonesBooleans[child.name.toLowerCase()] = child;
-//         }
-//     });
-// }
 
 function loadCharacter(characterType) {
     if (mixer) {
@@ -337,7 +311,7 @@ function loadCharacter(characterType) {
         (xhr) => {
             if (xhr.total) {
                 const pct = (xhr.loaded / xhr.total * 100).toFixed(1);
-                console.log(`Loading ${modelUrl}: ${pct}%`);
+                // console.log(`Loading ${modelUrl}: ${pct}%`);
             }
         },
         (err) => {
@@ -372,29 +346,11 @@ function onWindowResize() {
 function selectCharacter(type) {
     document.querySelectorAll('.character-option').forEach(el => el.classList.remove('selected'));
     document.querySelector(`[data-character="${type}"]`).classList.add('selected');
-    characterState.base = type;
     loadCharacter(type);
 }
 
-function updateSkinTone(value) {
-    characterState.skinTone = parseInt(value);
-    document.getElementById('skinToneValue').textContent = value;
-    updateModelAppearance();
-}
 
-function updateBodyWeight(value) {
-    characterState.bodyWeight = parseInt(value);
-    document.getElementById('bodyWeightValue').textContent = value;
-    updateModelAppearance();
-}
-
-function updateHeight(value) {
-    characterState.height = parseInt(value);
-    document.getElementById('heightValue').textContent = value;
-    updateModelAppearance();
-}
-
-//hair selection
+//hair selection -------
 
 const defaultHair = document.getElementById('defaultHair');
 const customHair = document.getElementById('customHair');
@@ -639,7 +595,7 @@ function checkFileInfo() {
     console.groupEnd();
 }
 
-//Left Arm length 
+//Left Arm length -------------
 
 const sliderLeftArm = document.getElementById('leftArmLength');
 
@@ -761,85 +717,6 @@ document.getElementById('tshirtColorPicker').addEventListener('input', (e) => {
     const hex = e.target.value; 
     updateTshirtColor(hex);
 });
-
-function updateModelAppearance() {
-    if (!currentModel) return;
-    const isDemoCharacter = currentModel.userData.isDemoCharacter;
-    
-    if (isDemoCharacter) {
-        updateDemoCharacterAppearance();
-    } else {
-        updateFBXCharacterAppearance();
-    }
-}
-
-function updateDemoCharacterAppearance() {
-    const newSkinColor = getSkinColor(characterState.skinTone);
-    currentModel.traverse((child) => {
-        if (child.isMesh && child.userData.type) {
-            if (['body', 'head', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'].includes(child.userData.type)) {
-                child.material.color.copy(newSkinColor);
-            }
-        }
-    });
-
-    const heightScale = characterState.height / 100;
-    const weightScale = 0.7 + (characterState.bodyWeight / 100) * 0.6;
-    
-    currentModel.scale.set(
-        heightScale * weightScale,
-        heightScale,
-        heightScale * weightScale
-    );
-
-    currentModel.traverse((child) => {
-        if (child.userData.type) {
-            const limbType = child.userData.type;
-            if (characterState.limbs.hasOwnProperty(limbType)) {
-                child.visible = characterState.limbs[limbType];
-            }
-        }
-    });
-}
-
-function updateFBXCharacterAppearance() {
-    const newSkinColor = getSkinColor(characterState.skinTone);
-    const heightScale = characterState.height / 100;
-    const weightScale = 0.7 + (characterState.bodyWeight / 100) * 0.6;
-    const baseScale = 0.01;
-    currentModel.scale.set(
-        baseScale * weightScale,
-        baseScale * heightScale,
-        baseScale * weightScale
-    );
-
-    currentModel.traverse((child) => {
-        if (child.isMesh) {
-            const limbVisibility = getLimbVisibilityForMesh(child);
-            if (limbVisibility !== null) {
-                child.visible = limbVisibility;
-            }
-        }
-    });
-}
-
-function getLimbVisibilityForMesh(mesh) {
-    const meshName = mesh.name.toLowerCase();
-    
-    if (meshName.includes('leftarm') || meshName.includes('left_arm') || meshName.includes('l_arm')) {
-        return characterState.limbs.leftArm;
-    }
-    if (meshName.includes('rightarm') || meshName.includes('right_arm') || meshName.includes('r_arm')) {
-        return characterState.limbs.rightArm;
-    }
-    if (meshName.includes('leftleg') || meshName.includes('left_leg') || meshName.includes('l_leg')) {
-        return characterState.limbs.leftLeg;
-    }
-    if (meshName.includes('rightleg') || meshName.includes('right_leg') || meshName.includes('r_leg')) {
-        return characterState.limbs.rightLeg;
-    }
-    return null;
-}
 
 async function generateExercise() {
     try {

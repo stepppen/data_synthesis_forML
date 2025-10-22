@@ -1,3 +1,6 @@
+# files that are tracked by Git but that you want to remove:
+# git rm -r --cached . && git add . && git status
+
 *.fbx
 *.hdr
 *.hdri
