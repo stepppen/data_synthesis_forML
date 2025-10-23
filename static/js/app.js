@@ -5,9 +5,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 let scene, camera, renderer, controls;
 let currentModel = null;
-let mixer = null;
-let clock = new THREE.Clock();
-let characterMeshes = {};
+let meshWithShapeKey = {};
 let bonesBooleans = {};
 let skinMeshes = [];
 let tshirtMeshes = [];
@@ -15,8 +13,6 @@ let hairMeshes = [];
 let fbxModel = null;
 
 //expose functions to global window -> can be called by html
-window.init = init;
-window.loadCharacter = loadCharacter;
 window.generateExercise = generateExercise;
 window.checkFileInfo = checkFileInfo;
 
@@ -33,11 +29,12 @@ function init() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    //exposure and contrast
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-
+    //renderer creates an actual <canvas>
     container.appendChild(renderer.domElement);
-
+    
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
@@ -96,13 +93,16 @@ function init() {
     animate();
 }
 
+//redraw every frame
 function animate() {
+    //after frame is rendered, animate is called again
     requestAnimationFrame(animate);
-    const delta = clock.getDelta();
-    if (mixer) mixer.update(delta);
     if (controls) controls.update();
     renderer.render(scene, camera);
 }
+
+
+// Traversing fbx model ---------------------------
 
 function findSkinMeshes(root) {
     const candidates = [];
@@ -159,11 +159,11 @@ function findTshirtMeshes(root) {
             matName.includes("shirt")
         ) {
             candidates.push(child);
-            tshirtMeshes.push(child);
         }
     });
     return candidates;
 }
+
 
 function findHairMeshes(root) {
     if (!root || typeof root.traverse !== 'function') return [];
@@ -177,17 +177,28 @@ function findHairMeshes(root) {
             (name.match(/^ch\d+_hair001/i))
         ) {
             candidates.push(child);
-            hairMeshes.push(child);
+        }
+    });
+    return candidates;
+}
+
+
+function findBones(root) {
+    if (!root || typeof root.traverse !== 'function') return [];
+    const candidates = {};
+    root.traverse((child) => {
+        if (child.isSkinnedMesh && child.skeleton) {
+            //new property on the candidates object
+            candidates[child.name] = {}; 
+            for (const bone of child.skeleton.bones) {
+                candidates[child.name][bone.name] = bone;
+            }
         }
     });
     return candidates;
 }
 
 function loadCharacter(characterType) {
-    if (mixer) {
-        try { mixer.stopAllAction(); } catch (e) {}
-        mixer = null;
-    }
     if (currentModel) {
         scene.remove(currentModel);
         currentModel = null;
@@ -195,7 +206,7 @@ function loadCharacter(characterType) {
     skinMeshes = [];
     tshirtMeshes = [];
     hairMeshes = [];
-    characterMeshes = {};
+    meshWithShapeKey = {};
     bonesBooleans = {};
 
     const loader = new FBXLoader();
@@ -210,6 +221,8 @@ function loadCharacter(characterType) {
 
     loader.load(
         modelUrl,
+        //second param -> defines onLoad
+        //pass downloaded model as argument to onLoad arrow function
         (fbx) => {
             fbxModel = fbx;
             currentModel = fbx;
@@ -217,36 +230,44 @@ function loadCharacter(characterType) {
             const baseScale = 0.01;
             fbx.scale.setScalar(baseScale);
 
-            const box = new THREE.Box3().setFromObject(fbx);
+            //reposition model using bounding box
+            const box = new THREE.Box3().setFromObject(fbx); //computes smallest box around vertices
             const center = box.getCenter(new THREE.Vector3());
-            fbx.position.sub(center);
+            fbx.position.sub(center); //move to 0,0,0
             const bboxMin = box.min.clone().sub(center);
-            fbx.position.y -= bboxMin.y;
+            fbx.position.y -= bboxMin.y; //subtract y position of lowest vertex from model y position
 
             fbx.traverse((child) => {
                 if (!child.isMesh) return;
                 child.castShadow = true;
                 child.receiveShadow = true;
 
+                //for shape keys
+                if (child.morphTargetDictionary) {
+                    meshWithShapeKey[child.name.toLowerCase()] = child;
+                }
+
                 if (child.material) {
+                    //ensures materials is always an array
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     
                     materials.forEach((mat, i) => {
                         const newMat = mat.clone();
+                        //converts to PBR rendering
                         if (newMat.map && newMat.map.image) {
                             newMat.map.colorSpace = THREE.SRGBColorSpace;
                             newMat.map.needsUpdate = true;
                         }
                         
-                        if (newMat.roughness === undefined) newMat.roughness = 0.8;
+                        if (newMat.roughness === undefined) newMat.roughness = 0.7;
                         if (newMat.metalness === undefined) newMat.metalness = 0.1;
                         
-                        
+                        //if fbx export includes MeshPhong or MeshLambert a.s.o
                         if (newMat.type !== 'MeshStandardMaterial') {
                             const standardMat = new THREE.MeshStandardMaterial({
                                 map: newMat.map,
                                 color: newMat.color || 0xffffff,
-                                roughness: 0.8,
+                                roughness: 0.7,
                                 metalness: 0.1,
                                 normalMap: newMat.normalMap,
                                 name: newMat.name
@@ -257,7 +278,9 @@ function loadCharacter(characterType) {
                             } else {
                                 child.material = standardMat;
                             }
-                        } else {
+                        } 
+                        //if already a standard material
+                        else {
                             if (Array.isArray(child.material)) {
                                 child.material[i] = newMat;
                             } else {
@@ -268,38 +291,12 @@ function loadCharacter(characterType) {
                 }
             });
             
-            
+            bonesBooleans = {};
+            bonesBooleans = findBones(fbx);
             tshirtMeshes = findTshirtMeshes(fbx);
             hairMeshes = findHairMeshes(fbx);
-            // bonesBooleans = findBones(fbx);
             skinMeshes = findSkinMeshes(fbx);
 
-            fbx.traverse((child) => {
-                if (child.isMesh && child.morphTargetDictionary) {
-                    characterMeshes[child.name.toLowerCase()] = child;
-                }
-            });
-
-            bonesBooleans = {};
-
-            fbx.traverse((child) => {
-                if (child.isSkinnedMesh && child.skeleton) {
-                    bonesBooleans[child.name] = {}; 
-                    for (const bone of child.skeleton.bones) {
-                        bonesBooleans[child.name][bone.name] = bone;
-                    }
-                }
-            });
-
-            if (fbx.animations && fbx.animations.length) {
-                mixer = new THREE.AnimationMixer(fbx);
-                fbx.userData.animations = {};
-                fbx.animations.forEach((clip, i) => {
-                    const action = mixer.clipAction(clip);
-                    fbx.userData.animations[clip.name || `anim_${i}`] = action;
-                });
-                console.log('Animations found:', Object.keys(fbx.userData.animations));
-            }
             scene.add(fbx);
 
             if (overlay) overlay.style.display = 'none';
@@ -308,11 +305,8 @@ function loadCharacter(characterType) {
             console.log('Tshirt meshes:', tshirtMeshes.map(m => m.name));
             console.log('Hair meshes:', hairMeshes.map(m => m.name));
         },
+        // onProgress CB
         (xhr) => {
-            if (xhr.total) {
-                const pct = (xhr.loaded / xhr.total * 100).toFixed(1);
-                // console.log(`Loading ${modelUrl}: ${pct}%`);
-            }
         },
         (err) => {
             console.error(`Failed to load ${modelUrl}:`, err);
@@ -321,32 +315,11 @@ function loadCharacter(characterType) {
     );
 }
 
-
-function getSkinColor(toneValue) {
-    const lightSkin = new THREE.Color(0xfdbcb4);
-    const mediumSkin = new THREE.Color(0xd08b5b);
-    const darkSkin = new THREE.Color(0x8d5524);
-
-    const factor = toneValue / 100;
-    
-    if (factor < 0.5) {
-        return lightSkin.lerp(mediumSkin, factor * 2);
-    } else {
-        return mediumSkin.lerp(darkSkin, (factor - 0.5) * 2);
-    }
-}
-
 function onWindowResize() {
     const container = document.getElementById('viewer-container');
     camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
-}
-
-function selectCharacter(type) {
-    document.querySelectorAll('.character-option').forEach(el => el.classList.remove('selected'));
-    document.querySelector(`[data-character="${type}"]`).classList.add('selected');
-    loadCharacter(type);
 }
 
 
@@ -384,7 +357,7 @@ function showCustomHair() {
 
 
 
-//shirt selection
+//shirt selection -----
 
 const defaultTshirt = document.getElementById('defaultTshirt');
 const customTshirt = document.getElementById('customTshirt');
@@ -418,6 +391,138 @@ function showCustomTshirt() {
     } 
 }
 
+
+
+//Left Arm length -------------
+
+const sliderLeftArm = document.getElementById('leftArmLength');
+
+sliderLeftArm.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    document.getElementById('leftArmLengthValue').textContent = Math.floor(value);
+
+    const leftArmChain = [
+        'mixamorig9LeftArm',
+        'mixamorig9LeftForeArm',
+        'mixamorig9LeftHand'
+    ];
+    
+    for (const meshName in bonesBooleans) {
+        const meshBones = bonesBooleans[meshName]; 
+        for (const boneName of leftArmChain) {
+            if (meshBones[boneName]) {
+                meshBones[boneName].scale.set(1, 1, 1);
+            }
+        }
+
+        if (value <= 3) {
+            if (meshBones['mixamorig9LeftHand']) {
+                meshBones['mixamorig9LeftHand'].scale.set(0, 0, 0);
+            }
+        }
+        if (value <= 2) {
+            if (meshBones['mixamorig9LeftForeArm']) {
+                meshBones['mixamorig9LeftForeArm'].scale.set(0, 0, 0);
+            }
+        }
+        if (value <= 1) {
+            if (meshBones['mixamorig9LeftArm']) { 
+                meshBones['mixamorig9LeftArm'].scale.set(0, 0, 0);
+            }
+        }
+    }
+});
+
+//Weight selection ------------
+const sliderWeight = document.getElementById('morphSlider');
+
+sliderWeight.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    document.getElementById('morphSliderValue').textContent = Math.floor(value*10);
+
+    const topsMesh = meshWithShapeKey["sweater"]; 
+    const bottomsMesh = meshWithShapeKey["ch31_pants001"];
+    
+    console.log("Available meshes with morphs:", meshWithShapeKey);
+
+    if (topsMesh) {
+        const dict = topsMesh.morphTargetDictionary;
+        const influences = topsMesh.morphTargetInfluences;
+
+        if (dict && dict["weight_sweater"] !== undefined) {
+            influences[dict["weight_sweater"]] = value;
+        } else {
+            console.warn("not found");
+        }
+    }
+
+    if (bottomsMesh) {
+        const dict = bottomsMesh.morphTargetDictionary;
+        const influences = bottomsMesh.morphTargetInfluences;
+
+        if (dict && dict["weight_pants"] !== undefined) {
+            influences[dict["weight_pants"]] = value;
+        } else {
+            console.warn("not found");
+        }
+    }
+});
+
+
+// Skin color picker -----------
+document.getElementById('skinColorPicker').addEventListener('input', (e) => {
+    const hex = e.target.value; 
+    updateSkinColor(hex);
+});
+
+function updateSkinColor(hex) {
+    console.log('Updating skin color for meshes:', skinMeshes.map(m => m.name));
+    skinMeshes.forEach(mesh => {
+        setMaterialColor(mesh.material, hex, true);
+    });
+}
+
+// Tshirt color picker -----------
+document.getElementById('tshirtColorPicker').addEventListener('input', (e) => {
+    const hex = e.target.value; 
+    updateTshirtColor(hex);
+});
+
+function updateTshirtColor(hex) {
+    console.log('Updating tshirt color for meshes:', tshirtMeshes.map(m => m.name));
+    tshirtMeshes.forEach(mesh => {
+        setMaterialColor(mesh.material, hex, true);
+    });
+}
+
+//general material color changer
+function setMaterialColor(material, hex, allowTextureTint = false) {
+    const apply = m => {
+        if (!m) return;
+        
+        if (!m.map || !m.map.image) {
+            if (m.color) {
+                m.color.set(hex);
+            }
+        } else if (allowTextureTint) {
+            if (m.color) {
+                m.color.set(hex);
+            }
+        }
+        
+        m.needsUpdate = true;
+    };
+
+    if (Array.isArray(material)) {
+        material.forEach(apply);
+    } else {
+        apply(material);
+    }
+}
+
+
+
+//check what fbx model holds -----------
 function checkFileInfo() {
     const model = (currentModel && typeof currentModel.traverse === 'function') ? currentModel
                  : (fbxModel && typeof fbxModel.traverse === 'function') ? fbxModel
@@ -532,13 +637,6 @@ function checkFileInfo() {
         summary.animations = anims.map(a => ({ name: a.name || 'anim', duration: a.duration, tracks: a.tracks ? a.tracks.length : 0 }));
     }
 
-    if (mixer) {
-        try {
-            const actions = mixer._actions || [];
-            summary.mixerActions = actions.map(a => a.getClip ? a.getClip().name : 'action');
-        } catch (e) {}
-    }
-
     console.groupCollapsed(`Model Info: ${summary.rootName}`);
     console.log('Bounding Box:', summary.boundingBox);
     console.log('Object count:', summary.objectCount);
@@ -595,129 +693,8 @@ function checkFileInfo() {
     console.groupEnd();
 }
 
-//Left Arm length -------------
 
-const sliderLeftArm = document.getElementById('leftArmLength');
-
-sliderLeftArm.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
-    document.getElementById('leftArmLengthValue').textContent = Math.floor(value);
-
-    const leftArmChain = [
-        'mixamorig9LeftArm',
-        'mixamorig9LeftForeArm',
-        'mixamorig9LeftHand'
-    ];
-    
-    for (const meshName in bonesBooleans) {
-        const meshBones = bonesBooleans[meshName]; 
-        for (const boneName of leftArmChain) {
-            if (meshBones[boneName]) {
-                meshBones[boneName].scale.set(1, 1, 1);
-            }
-        }
-
-        if (value <= 3) {
-            if (meshBones['mixamorig9LeftHand']) {
-                meshBones['mixamorig9LeftHand'].scale.set(0, 0, 0);
-            }
-        }
-        if (value <= 2) {
-            if (meshBones['mixamorig9LeftForeArm']) {
-                meshBones['mixamorig9LeftForeArm'].scale.set(0, 0, 0);
-            }
-        }
-        if (value <= 1) {
-            if (meshBones['mixamorig9LeftArm']) { 
-                meshBones['mixamorig9LeftArm'].scale.set(0, 0, 0);
-            }
-        }
-    }
-});
-
-const sliderWeight = document.getElementById('morphSlider');
-
-sliderWeight.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
-    document.getElementById('morphSliderValue').textContent = Math.floor(value*10);
-
-    const topsMesh = characterMeshes["sweater"]; 
-    const bottomsMesh = characterMeshes["ch31_pants001"];
-    
-    console.log("Available meshes with morphs:", characterMeshes);
-
-    if (topsMesh) {
-        const dict = topsMesh.morphTargetDictionary;
-        const influences = topsMesh.morphTargetInfluences;
-
-        if (dict && dict["weight_sweater"] !== undefined) {
-            influences[dict["weight_sweater"]] = value;
-        } else {
-            console.warn("not found");
-        }
-    }
-
-    if (bottomsMesh) {
-        const dict = bottomsMesh.morphTargetDictionary;
-        const influences = bottomsMesh.morphTargetInfluences;
-
-        if (dict && dict["weight_pants"] !== undefined) {
-            influences[dict["weight_pants"]] = value;
-        } else {
-            console.warn("not found");
-        }
-    }
-});
-
-function setMaterialColor(material, hex, allowTextureTint = false) {
-    const apply = (m) => {
-        if (!m) return;
-        
-        if (!m.map || !m.map.image) {
-            if (m.color) {
-                m.color.set(hex);
-            }
-        } else if (allowTextureTint) {
-            if (m.color) {
-                m.color.set(hex);
-            }
-        }
-        
-        m.needsUpdate = true;
-    };
-
-    if (Array.isArray(material)) {
-        material.forEach(apply);
-    } else {
-        apply(material);
-    }
-}
-
-function updateSkinColor(hex) {
-    console.log('Updating skin color for meshes:', skinMeshes.map(m => m.name));
-    skinMeshes.forEach(mesh => {
-
-        setMaterialColor(mesh.material, hex, true);
-    });
-}
-
-function updateTshirtColor(hex) {
-    console.log('Updating tshirt color for meshes:', tshirtMeshes.map(m => m.name));
-    tshirtMeshes.forEach(mesh => {
-        setMaterialColor(mesh.material, hex, true);
-    });
-}
-
-document.getElementById('skinColorPicker').addEventListener('input', (e) => {
-    const hex = e.target.value; 
-    updateSkinColor(hex);
-});
-
-document.getElementById('tshirtColorPicker').addEventListener('input', (e) => {
-    const hex = e.target.value; 
-    updateTshirtColor(hex);
-});
-
+//send config using btn -------
 async function generateExercise() {
     try {
         document.querySelector('.final-btn').textContent = 'Generating...';
@@ -732,6 +709,7 @@ async function generateExercise() {
             saveName: document.getElementById('saveName').value
         };
         
+        //pause execution until data comes back; otherwise promise will result in pending
         const response = await fetch('/api/generate', {
             method: 'POST',
             headers: {
@@ -740,8 +718,9 @@ async function generateExercise() {
             body: JSON.stringify(config)
         });
 
+        //pauses only the async function until promise settles -> resolve or reject
         const result = await response.json();
-        console.log("Result from generation: ", result)
+        console.log("Result: ", result)
         
     } catch (error) {
         console.error('Error generating exercise:', error);
@@ -764,4 +743,5 @@ function showError(message, type = 'error') {
     }
 }
 
+//on load => init
 window.addEventListener('load', init);
